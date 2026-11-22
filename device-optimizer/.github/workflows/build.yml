@@ -1,0 +1,56 @@
+name: Build executables
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]        # pushing a tag like v1.0 also creates a Release
+  workflow_dispatch:     # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write        # needed to attach files to a Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            built: dist/device_optimizer.exe
+            asset: device_optimizer-windows.exe
+          - os: macos-latest
+            built: dist/device_optimizer
+            asset: device_optimizer-macos
+          - os: ubuntu-latest
+            built: dist/device_optimizer
+            asset: device_optimizer-linux
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install psutil pyinstaller
+
+      - name: Build executable
+        run: python -m PyInstaller --onefile --name device_optimizer device_optimizer.py
+
+      - name: Rename output
+        shell: bash
+        run: mv "${{ matrix.built }}" "dist/${{ matrix.asset }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+
+      - name: Attach to Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.asset }}
